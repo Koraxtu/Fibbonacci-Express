@@ -1,30 +1,36 @@
-# yaml-language-server: $schema='none'
-name: Deploy Frontend
+name: Deploy MultiDocker
+
 on:
   push:
     branches:
-      - master # check your repo, your default branch might be master!
-  
+      - master
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      - run: docker build -t cygnetops/react-test -f Dockerfile.dev .
-      - run: docker run -e CI=true cygnetops/react-test npm test
-  
-      - name: Generate deployment package
-        run: zip -r deploy.zip . -x '*.git*'
-  
-      - name: Deploy to EB
-        uses: einaregilsson/beanstalk-deploy@v21
-        with:
-          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
-          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
-          application_name: DockerApp
-          environment_name: DockerApp-env
-          existing_bucket_name: elasticbeanstalk-us-east-1-296123297330
-          region: us-east-1
-          version_label: ${{ github.sha }}
-          deployment_package: deploy.zip
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to Docker registry
+        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and test React client
+        run: |
+          docker build -t koraxtu/react-test -f ./client/Dockerfile.dev ./client
+          docker run -e CI=true koraxtu/react-test npm test
+
+      - name: Build Docker images
+        run: |
+          docker build -t koraxtu/multi-client ./client
+          docker build -t koraxtu/multi-nginx ./nginx
+          docker build -t koraxtu/multi-server ./server
+          docker build -t koraxtu/multi-worker ./worker
+
+      - name: Push Docker images
+        run: |
+          docker push koraxtu/multi-client
+          docker push koraxtu/multi-nginx
+          docker push koraxtu/multi-server
+          docker push koraxtu/multi-worker
